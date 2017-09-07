@@ -3,22 +3,7 @@
 
 ## Table of Contents
 
-   * [Containers on Azure Container Service with DockerCE (Swarm Mode)](#containers-on-azure-container-service-with-dockerce-swarm-mode)
-      * [Table of Contents](#table-of-contents)
-      * [Overview and Pre-Requisites](#overview-and-pre-requisites)
-         * [Overview](#overview)
-         * [Pre-requisites](#pre-requisites)
-         * [Topics Covered](#topics-covered)
-      * [Lab](#lab)
-         * [Running locally](#running-locally)
-         * [Pushing Docker images to Azure Container Registry](#pushing-docker-images-to-azure-container-registry)
-         * [Creating CosmosDB database with MongoDB adapter](#creating-cosmosdb-database-with-mongodb-adapter)
-         * [Creating the DockerCE (Swarm Mode) cluster on Azure Container Service](#creating-the-dockerce-swarm-mode-cluster-on-azure-container-service)
-         * [Deploying the container to the DockerCE (Swarm Mode) cluster](#deploying-the-container-to-the-dockerce-swarm-mode-cluster)
-      * [Conclusion](#conclusion)
-      * [End your Lab](#end-your-lab)
-      * [Additional Resources and References](#additional-resources-and-references)
-      * [License](#license)
+   
 
 
 ## Overview and Pre-Requisites
@@ -210,6 +195,18 @@ Browse to the agent's FQDN you obtained from the earlier steps [http://<agent dn
 You should see the app running.
 
 ![Todo-aholic app running](media/todoapp.png)
+
+<!---
+### Scaling
+You can scale the Azure Container Service cluster by running
+```
+az acs scale -n <acs name> --new-agent-count 5
+```
+You can then scale the service running on your cluster by running
+```
+docker service scale <stack name>_web=5
+```
+-->
 
 ## Conclusion
 
