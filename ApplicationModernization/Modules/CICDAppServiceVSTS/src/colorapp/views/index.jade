@@ -10,7 +10,7 @@ block content
 
   script.
     function update() {
-      $.get('!{colorMicroservice}', function( data ) {
+      $.get('!{colorMicroservice}?timestamp=' + $.now(), function( data ) {
 
         var li = $("ul#cluster li#"+data.computerName);
         if(li.length>0) {
@@ -23,7 +23,7 @@ block content
         }
       });
       
-      setTimeout(update,500);
+      setTimeout(update,100);
     }
 
   h1= title
