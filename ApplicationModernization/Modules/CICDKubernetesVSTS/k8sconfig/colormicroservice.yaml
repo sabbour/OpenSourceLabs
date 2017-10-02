@@ -1,0 +1,31 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: colormicroservice
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: colormicroservice
+    spec:
+      containers:
+      - name: colormicroservice
+        image: ACRNAME.azurecr.io/colormicroservice:BUILDVERSION
+        ports:
+        - containerPort: 3000
+      imagePullSecrets:
+        - name: ACRNAME
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: colormicroservice
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app: colorapp

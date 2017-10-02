@@ -1,0 +1,34 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: colorapp
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: colorapp
+    spec:
+      containers:
+      - name: colorapp
+        image: ACRNAME.azurecr.io/colorapp:BUILDVERSION
+        ports:
+        - containerPort: 3000
+        env:
+        - name: COLORMICROSERVICE
+          value: "COLORMICROSERVICEENV"
+      imagePullSecrets:
+        - name: ACRNAME
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: colorapp
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app: colorapp
