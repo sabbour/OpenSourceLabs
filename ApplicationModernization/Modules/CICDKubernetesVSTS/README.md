@@ -137,6 +137,7 @@ Get the cluster credentials
 ```
 az acs kubernetes get-credentials -n <acs name>
 ```
+> The Kubernetes config file should now be present in ```~/.kube/config```. You will need its content later when configuring VSTS. 
 
 ### Create Kubernetes namespaces for production and staging
 
@@ -159,19 +160,36 @@ Execute the configuration by running
 kubectl apply -f k8sconfig/namespaces.yaml
 ```
 
+### Configure the Azure Container Registry secret in Kubernetes
+Get the Azure Container Registry username and password
+```
+az acr credential show -n <acr name>
+```
+
+Register the Azure Container Registry secret called **acrsecret** within Kubernetes. You'll later reference this in the YAML files.
+> You'll need to do this once per namespace, hence repeat the command below once with ```--namespace=production``` and ```--namespace=staging```
+```
+kubectl create secret docker-registry acrsecret
+--docker-server=<acr name>.azurecr.io
+--docker-username=<your acr admin username>
+--docker-password=<your acr admin password>
+--docker-email=<your email>
+--namespace=<namespace>
+```
+
 Browse to the Kubernetes dashboard
 ```
 az acs kubernetes browse -n  <acs name>
 ```
 
-You should be able to view the Kubernetes dashboard running as in the following screenshot.
+You should be able to view the Kubernetes dashboard, showing the namespaces you created as in the following screenshot.
 
 ![Kubernetes dashboard](media/k8sui.png)
 
 
-Examine the ```k8sconfig/colorapp.yaml``` and ```k8sconfig/colormicroservice.yaml``` files which should be like the below. Notice the placeholders ```ACRNAME```, ```BUILDVERSION``` and ```COLORMICROSERVICEENV```. These will be replaced by the build process in VSTS with the variables defined inside VSTS.
+Examine the ```k8sconfig/colorapp.yaml``` and ```k8sconfig/colormicroservice.yaml``` files which should be like the below. Notice the placeholders ```__ACRNAME__```, ```__BUILDVERSION__``` and ```__COLORMICROSERVICEURL__```. These will be replaced by the build process in VSTS with the variables defined inside VSTS.
 
-> Note the ```imagePullSecrets``` property. When you configure the build steps on VSTS, you'll configure a secret on Kubernetes with the Docker repository credentials. This tells Kubernetes what is the name of the secret you configured to allow it to pull the image from your Azure Container Registry.
+> Note the ```imagePullSecrets``` property with the value **acrsecret**. This tells Kubernetes what is the name of the secret you configured to allow it to pull the image from your Azure Container Registry.
 
 
 ```YAML
@@ -180,7 +198,7 @@ kind: Deployment
 metadata:
   name: colorapp
 spec:
-  replicas: 1
+  replicas: 2
   template:
     metadata:
       labels:
@@ -188,14 +206,14 @@ spec:
     spec:
       containers:
       - name: colorapp
-        image: ACRNAME.azurecr.io/colorapp:BUILDVERSION
+        image: __ACRNAME__.azurecr.io/colorapp
         ports:
         - containerPort: 3000
         env:
         - name: COLORMICROSERVICE
-          value: "COLORMICROSERVICEENV"
+          value: "__COLORMICROSERVICEURL__"
       imagePullSecrets:
-        - name: ACRNAME
+        - name: acrsecret
 ---
 apiVersion: v1
 kind: Service
@@ -225,11 +243,11 @@ spec:
     spec:
       containers:
       - name: colormicroservice
-        image: ACRNAME.azurecr.io/colormicroservice:BUILDVERSION
+        image: __ACRNAME__.azurecr.io/colormicroservice
         ports:
         - containerPort: 3000
       imagePullSecrets:
-        - name: ACRNAME
+        - name: acrsecret
 ---
 apiVersion: v1
 kind: Service
@@ -242,13 +260,15 @@ spec:
       targetPort: 3000
       protocol: TCP
   selector:
-    app: colorapp
+    app: colormicroservice
 ```
 
 
-### Configure Build Pipeline
+### Configure Build Pipeline for **colorapp**
 
 You're now going to use Visual Studio Team Services to setup the Build and Release pipelines.
+
+> Since we have 2 Docker containers, we'll opt to create multiple build and release pipelines, one per container. This will give you the flexibility to later add more microservices and control the build process for each of them individually.
 
 Go to http://www.visualstudio.com and hit **Sign in** then sign in with your Microsoft account you use for Azure.
 
@@ -272,68 +292,108 @@ Once your project is ready, you will see the screen below. Since you're already 
 
 Hit the **New Definition** button to start.
 
+You'll now create the build definition for the **colorapp**.
+
 ![Create new build definition](media/newbuilddef.png)
 
 Select the **empty process** template.
 
 ![Select Empty process template](media/createbuilddef.png)
 
-Change the process agent queue to **Hosted Linux Preview**. This has the tools required to build the Docker images.
+Change the process agent queue to **Hosted Linux Preview**. This has the tools required to build the Docker images. Rename the build process to **colorlab-colorapp**.
 
-![Change build agent to Hosted Linux](media/process.png)
+![Change build agent to Hosted Linux](media/process-colorapp.png)
 
 Now authorize Visual Studio Team Services to your Github account then pick the right repository that you forked.
 
-![Configure sources](media/getsources.png)
+![Configure sources](media/getsources-colorapp.png)
 
 After configuring the repository, hit **Add Task**. You're now going to add a Docker task to build a Docker image from your source code.
 
-![Add Docker task](media/adddockertask.png)
+![Add Docker task](media/adddockertask-colorapp.png)
 
-In the task, you're going to point it towards your Azure Container Registry and you're going to configure it to point to the Docker file that should be in the following path in your forked repository: ```ApplicationModernization/Modules/CICDKubernetesVSTS/src/colormicroservice/Dockerfile```
+In the task, you're going to point it towards your Azure Container Registry and you're going to configure it to point to the Docker file that should be in the following path in your forked repository: ```ApplicationModernization/Modules/CICDKubernetesVSTS/src/colorapp/Dockerfile```
 
-Additionally, make sure that the image name is ```colormicroservice:$(Build.BuildId)``` and that **Qualify Image Name** is checked.
+Additionally, make sure that the image name is ```colorapp:$(Build.BuildId)``` and that **Qualify Image Name** is checked.
 
 This will tag the image version with your Azure Container Registry name and **Build Id** allowing you to control which version is eventually deployed. Do not use the **latest** tag here.
 
-![Build image task](media/buildtask.png)
+![Build image task](media/buildtask-colorapp.png)
 
-Now add another Docker task, this time configure it with **Push an image** action and the same image name ```colormicroservice:$(Build.BuildId)```. Make sure **Qualify Image Name** is checked.
+Now add another Docker task, this time configure it with **Push an image** action and the same image name ```colorapp:$(Build.BuildId)```. Make sure **Qualify Image Name** is checked.
 
-![Push image task](media/pushtask.png)
+![Push image task](media/pushtask-colorapp.png)
+
+Add a  **Publish Build Artifacts** task. Configure the task to publish the Kubernetes YAML file for this application located at ```ApplicationModernization/Modules/CICDKubernetesVSTS/k8sconfig/colorapp.yaml```
+
+![Publish YAML artifact](media/publishartifacts-colorapp.png)
 
 Head over to the **Triggers** tab, and enable Continuous Integration. This will trigger the build pipeline whenever a new change is committed to your code repository.
 
 Naturally, you could do this on a specific branch.
 
-![Enable CI](media/buildtrigger.png)
+![Enable CI](media/buildtrigger-colorapp.png)
 
 Finally, hit the **Save & queue** button to queue a build manually, then review the build log, you should be able to see something like the below.
 
-![Build log](media/buildlog.png)
+![Build log](media/buildlog-colorapp.png)
 
 Congratulations, you've run your first build pipeline! If you login to the Azure Portal and navigate to your Azure Container Registry, you should be able to find the image there.
 
 Your tag here may differ depending on how many times you ran this build. Every time the build runs, a new image with a new tag is created.
 
-![Azure Container Registry](media/acr.png)
+![Azure Container Registry](media/acr-colorapp.png)
 
+### Configure Build Pipeline for **colormicroservice**
+
+> Since we have 2 Docker containers, we'll opt to create multiple build and release pipelines, one per container. This will give you the flexibility to later add more microservices and control the build process for each of them individually.
+
+Instead of repeating the steps all over again, simply **Clone** the build pipeline you just created, then change the references to **colorapp** to be references to **colormicroservice** for the Dockerfile location, Docker image name and Kubernetes YAML file.
+
+
+![Clone the build pipeline](media/clone-buildpipeline.png)
+
+Once you save it, you should end up with 2 build pipelines as below.
+
+![Finished build pipelines](media/two-build-pipelines.png)
 
 ### Configure Release Pipeline for Staging
 
 Now that you have your build pipeline configured to trigger automatically on every code commit, it is time for you to configure the release pipeline, to actually deploy your new Docker images.
 
+> Similarly to the Build Pipeline, you'll create 2 Release Pipelines, one per container. This will give you the flexibility to later add more microservices and control the release process for each of them individually.
+
 Head over to the **Releases** tab and hit the **new definition** button. 
 
 ![Create Release definition](media/newreleasedef.png)
 
-Select the **empty process** template.
+Start with an **Empty process** template.
 
-![Select the Empty process template](media/releaseempty.png)
+![Name it Staging](media/createstaging-colorapp.png)
 
-And name this environment **Staging** then click on the **1 phase, 0 task** link to start adding tasks.
+And name this environment **Staging** then click on the **1 phase, 0 task** link to start adding tasks. Rename the definition to **colorapp**.
 
-![Name it Staging](media/createstaging.png)
+First thing to do would be to do add the variables in the **Variables** tab. You'll use these to replace the tokens in the YAML file.
+
+![Edit build definition](media/editbuilddef-colorapp.png)
+
+For running kubectl commands by using the task, first you need to create a service connection to Kubernetes cluster.
+
+![Create Kubernetes Service Connection](media/kubeconfig.png)
+
+ You'll thn need to providing the following details:
+
+- **Server URL**: you can get this detail from the Azure portal overview page of the ACS cluster. 
+
+![Get Kubernetes cluster URL](media/k8sclustername.png)
+
+- **Kubeconfig**: When you ran ```az acs kubernetes get-credentials```, a Kubernetes config file was created in ```~/.kube/config```. You will need copy/paste the content of the master Kubernetes cluster configuration here. You can view its content by running a ```cat ~/.kube/config``` in your terminal.
+
+![Add new Kubernetes Connection](media/addk8sconnection.png)
+
+Once this is configured
+
+You will also need to configure the **Secret name**.
 
 Now add an **Azure App Service Deploy** task.
 

@@ -1,0 +1,21 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: colorapp
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: colorapp
+    spec:
+      containers:
+      - name: colorapp
+        image: __ACRNAME__.azurecr.io/colorapp
+        ports:
+        - containerPort: 3000
+        env:
+        - name: COLORMICROSERVICE
+          value: "__COLORMICROSERVICEURL__"
+      imagePullSecrets:
+        - name: acrsecret

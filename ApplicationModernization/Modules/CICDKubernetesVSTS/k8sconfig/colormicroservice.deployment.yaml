@@ -11,21 +11,8 @@ spec:
     spec:
       containers:
       - name: colormicroservice
-        image: ACRNAME.azurecr.io/colormicroservice:BUILDVERSION
+        image: __ACRNAME__.azurecr.io/colormicroservice
         ports:
         - containerPort: 3000
       imagePullSecrets:
-        - name: ACRNAME
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: colormicroservice
-spec:
-  type: LoadBalancer
-  ports:
-    - port: 3000
-      targetPort: 3000
-      protocol: TCP
-  selector:
-    app: colorapp
+        - name: acrsecret
